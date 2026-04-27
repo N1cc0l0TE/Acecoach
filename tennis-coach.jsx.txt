@@ -1,0 +1,351 @@
+import { useState, useRef, useEffect } from "react";
+
+const SYSTEM_PROMPT = `You are AceCoach, an expert AI tennis coach with 20+ years of experience coaching recreational players from beginner to advanced club level.
+
+Your personality: encouraging, precise, practical. You speak like a seasoned coach on a courtside bench — direct, warm, knowledgeable.
+
+You help players with:
+- Fixing technique problems (serve, forehand, backhand, volley, footwork)
+- Building practice routines tailored to their schedule and level
+- Mental game and match strategy
+- Understanding rules and scoring
+- Gear advice (rackets, strings, shoes)
+- Drills they can do alone or with a partner
+
+Always ask follow-up questions to personalize advice (e.g., their level, how long they've played, specific symptoms of the problem). Keep responses focused and actionable. Use short paragraphs. Occasionally use tennis analogies. Never be vague — give specific, concrete tips.
+
+Start the conversation warmly and ask what they want to work on.`;
+
+const suggestedQuestions = [
+  "Why does my backhand keep going into the net?",
+  "Build me a weekly practice plan",
+  "How do I add more power to my serve?",
+  "Tips for playing against a pusher",
+  "How should I warm up before a match?",
+];
+
+export default function TennisCoach() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [started, setStarted] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const sendMessage = async (text) => {
+    const userText = text || input.trim();
+    if (!userText || loading) return;
+
+    setInput("");
+    setStarted(true);
+
+    const newMessages = [...messages, { role: "user", content: userText }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: newMessages,
+        }),
+      });
+
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || "Sorry, I couldn't get a response.";
+      setMessages([...newMessages, { role: "assistant", content: reply }]);
+    } catch (err) {
+      setMessages([...newMessages, { role: "assistant", content: "Connection error. Please try again." }]);
+    }
+
+    setLoading(false);
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "#0a1a0f",
+      backgroundImage: `
+        radial-gradient(ellipse at 20% 50%, rgba(16, 80, 30, 0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(180, 220, 60, 0.08) 0%, transparent 50%)
+      `,
+      fontFamily: "'Georgia', serif",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+    }}>
+
+      {/* Header */}
+      <div style={{
+        width: "100%",
+        maxWidth: 720,
+        padding: "28px 24px 0",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+      }}>
+        <div style={{
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #b8e03a, #6ab04c)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          flexShrink: 0,
+          boxShadow: "0 0 20px rgba(184,224,58,0.3)",
+        }}>🎾</div>
+        <div>
+          <div style={{
+            color: "#b8e03a",
+            fontSize: 22,
+            fontWeight: "bold",
+            letterSpacing: "0.02em",
+            lineHeight: 1.1,
+          }}>AceCoach</div>
+          <div style={{
+            color: "#5a8a4a",
+            fontSize: 12,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}>AI Tennis Coach</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#b8e03a", boxShadow: "0 0 8px #b8e03a" }} />
+          <span style={{ color: "#5a8a4a", fontSize: 12, letterSpacing: "0.08em" }}>On court</span>
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div style={{
+        width: "100%",
+        maxWidth: 720,
+        flex: 1,
+        padding: "24px 24px 0",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        minHeight: "calc(100vh - 200px)",
+      }}>
+
+        {/* Welcome state */}
+        {!started && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{
+              background: "rgba(184,224,58,0.06)",
+              border: "1px solid rgba(184,224,58,0.15)",
+              borderRadius: 16,
+              padding: "28px 28px",
+              marginBottom: 24,
+            }}>
+              <p style={{
+                color: "#c8d8b0",
+                fontSize: 16,
+                lineHeight: 1.7,
+                margin: 0,
+              }}>
+                👋 Hey there! I'm your personal tennis coach. Whether you're battling a stubborn double fault, looking for a practice plan, or want to finally understand when to chip-and-charge — I've got you covered.<br /><br />
+                <span style={{ color: "#7aaa5a" }}>What do you want to work on today?</span>
+              </p>
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ color: "#4a7a3a", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 12px" }}>Try asking</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {suggestedQuestions.map((q, i) => (
+                  <button key={i} onClick={() => sendMessage(q)} style={{
+                    background: "rgba(184,224,58,0.07)",
+                    border: "1px solid rgba(184,224,58,0.2)",
+                    borderRadius: 20,
+                    color: "#9aca6a",
+                    fontSize: 13,
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={e => {
+                    e.target.style.background = "rgba(184,224,58,0.14)";
+                    e.target.style.borderColor = "rgba(184,224,58,0.4)";
+                  }}
+                  onMouseLeave={e => {
+                    e.target.style.background = "rgba(184,224,58,0.07)";
+                    e.target.style.borderColor = "rgba(184,224,58,0.2)";
+                  }}>
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{
+              display: "flex",
+              justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+            }}>
+              {msg.role === "assistant" && (
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #b8e03a, #6ab04c)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  flexShrink: 0,
+                  marginRight: 10,
+                  marginTop: 4,
+                }}>🎾</div>
+              )}
+              <div style={{
+                maxWidth: "78%",
+                padding: "12px 16px",
+                borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                background: msg.role === "user"
+                  ? "linear-gradient(135deg, #2a5a1a, #1e4a14)"
+                  : "rgba(255,255,255,0.05)",
+                border: msg.role === "user"
+                  ? "1px solid rgba(184,224,58,0.25)"
+                  : "1px solid rgba(255,255,255,0.08)",
+                color: msg.role === "user" ? "#d0f080" : "#c0d8a0",
+                fontSize: 14.5,
+                lineHeight: 1.7,
+                whiteSpace: "pre-wrap",
+              }}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: "50%",
+                background: "linear-gradient(135deg, #b8e03a, #6ab04c)",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+              }}>🎾</div>
+              <div style={{
+                padding: "12px 18px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "18px 18px 18px 4px",
+                display: "flex", gap: 5, alignItems: "center",
+              }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: "#b8e03a",
+                    animation: "bounce 1.2s infinite",
+                    animationDelay: `${i * 0.2}s`,
+                    opacity: 0.7,
+                  }} />
+                ))}
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* Input */}
+      <div style={{
+        width: "100%",
+        maxWidth: 720,
+        padding: "20px 24px 28px",
+        position: "sticky",
+        bottom: 0,
+        background: "linear-gradient(to top, #0a1a0f 70%, transparent)",
+      }}>
+        <div style={{
+          display: "flex",
+          gap: 10,
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(184,224,58,0.2)",
+          borderRadius: 14,
+          padding: "8px 8px 8px 16px",
+          transition: "border-color 0.2s",
+        }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Ask your coach anything..."
+            rows={1}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "#c8d8a8",
+              fontSize: 14.5,
+              fontFamily: "inherit",
+              resize: "none",
+              lineHeight: 1.5,
+              paddingTop: 6,
+              paddingBottom: 6,
+            }}
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={!input.trim() || loading}
+            style={{
+              background: input.trim() && !loading
+                ? "linear-gradient(135deg, #b8e03a, #7aba3a)"
+                : "rgba(184,224,58,0.1)",
+              border: "none",
+              borderRadius: 10,
+              width: 38,
+              height: 38,
+              cursor: input.trim() && !loading ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "all 0.2s",
+              alignSelf: "flex-end",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13" stroke={input.trim() && !loading ? "#0a1a0f" : "#4a7a3a"} strokeWidth="2.5" strokeLinecap="round"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={input.trim() && !loading ? "#0a1a0f" : "#4a7a3a"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <p style={{ color: "#2a4a22", fontSize: 11, textAlign: "center", margin: "10px 0 0", letterSpacing: "0.05em" }}>
+          Press Enter to send · Shift+Enter for new line
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-5px); }
+        }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(184,224,58,0.2); border-radius: 2px; }
+      `}</style>
+    </div>
+  );
+}
