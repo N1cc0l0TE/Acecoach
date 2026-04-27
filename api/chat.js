@@ -6,35 +6,50 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    console.error('GEMINI_API_KEY is not set');
+    console.error('GROQ_API_KEY is not set');
     return res.status(500).json({ error: 'API key not configured' });
   }
 
   try {
     const { messages, system } = req.body;
 
-    const geminiMessages = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    const groqMessages = [
+      { role: 'system', content: system },
+      ...messages
+    ];
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-    console.log('Calling Gemini API...');
-
-    const response = await fetch(url, {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: system }] },
-        contents: geminiMessages,
-        generationConfig: { maxOutputTokens: 1000 }
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages,
+        max_tokens: 1000
       })
     });
 
+    const data = await response.json();
+    console.log('Groq response status:', response.status);
+
+    if (!response.ok) {
+      console.error('Groq error:', JSON.stringify(data));
+      return res.status(500).json({ error: data.error?.message || 'Groq API error' });
+    }
+
+    const text = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
+    res.status(200).json({ content: [{ text }] });
+
+  } catch (error) {
+    console.error('Handler error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+}
     const data = await response.json();
     console.log('Gemini response status:', response.status);
 
