@@ -6,32 +6,48 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error('GEMINI_API_KEY is not set');
+    return res.status(500).json({ error: 'API key not configured' });
+  }
 
   try {
     const { messages, system } = req.body;
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const geminiMessages = messages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    console.log('Calling Gemini API...');
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'system', content: system }, ...messages],
-        max_tokens: 1000
+        system_instruction: { parts: [{ text: system }] },
+        contents: geminiMessages,
+        generationConfig: { maxOutputTokens: 1000 }
       })
     });
 
     const data = await response.json();
-    if (!response.ok) return res.status(500).json({ error: data.error?.message || 'Groq error' });
+    console.log('Gemini response status:', response.status);
 
-    const text = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
+    if (!response.ok) {
+      console.error('Gemini error:', JSON.stringify(data));
+      return res.status(500).json({ error: data.error?.message || 'Gemini API error' });
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't get a response.";
     res.status(200).json({ content: [{ text }] });
 
   } catch (error) {
+    console.error('Handler error:', error.message);
     res.status(500).json({ error: error.message });
   }
 }
