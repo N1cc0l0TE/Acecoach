@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AceCoach — AI Tennis Coach</title>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+    @keyframes floatBall { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-16px) rotate(180deg)} }
+    @keyframes floatRacket1 { 0%,100%{transform:rotate(-15deg) translateY(0)} 50%{transform:rotate(-10deg) translateY(-12px)} }
+    @keyframes floatRacket2 { 0%,100%{transform:rotate(20deg) translateY(0)} 50%{transform:rotate(25deg) translateY(-14px)} }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+
+    const FREE_MESSAGES = 5;
+    const STRIPE_URL = "https://buy.stripe.com/your_link_here";
+
+    // ── Grand Slam season detection ─────────────────────────────────────────
+    function getSeason() {
+      const now = new Date();
+      const m = now.getMonth(); // 0=Jan
+      const d = now.getDate();
+      // Clay: April (3) – mid June (5, day < 15)
+      if (m >= 3 && (m < 5 || (m === 5 && d < 15))) return "clay";
+      // Grass: mid June – mid August (7, day < 15)
+      if ((m === 5 && d >= 15) || m === 6 || (m === 7 && d < 15)) return "grass";
+      // Hard: mid August – March
+      return "hard";
+    }
+
+    const THEMES = {
+      clay: {
+        label: "🟤 Clay Court Season",
+        sublabel: "Roland Garros",
+        bg: "#140a04",
+        bgGrad: `
+          radial-gradient(ellipse at 15% 45%, rgba(160,55,15,0.6) 0%, transparent 55%),
+          radial-gradient(ellipse at 82% 15%, rgba(210,100,30,0.18) 0%, transparent 50%),
+          radial-gradient(ellipse at 55% 85%, rgba(140,60,10,0.2) 0%, transparent 45%)`,
+        accent: "#e8823a",
+        accentGlow: "rgba(232,130,58,0.35)",
+        accentDim: "#904830",
+        accentFaint: "rgba(232,130,58,0.08)",
+        accentBorder: "rgba(232,130,58,0.22)",
+        text: "#f0d0a0",
+        textDim: "#a06840",
+        userBubble: "linear-gradient(135deg, #5a2208, #421804)",
+        userText: "#f8d080",
+        ballFill: "#e8c030",
+        ballGlow: "rgba(232,192,48,0.4)",
+        courtLine: "#e8823a",
+        btnText: "#140a04",
+      },
+      grass: {
+        label: "🌿 Grass Court Season",
+        sublabel: "Wimbledon",
+        bg: "#050e06",
+        bgGrad: `
+          radial-gradient(ellipse at 15% 45%, rgba(15,80,25,0.65) 0%, transparent 55%),
+          radial-gradient(ellipse at 82% 15%, rgba(180,220,60,0.1) 0%, transparent 50%),
+          radial-gradient(ellipse at 55% 85%, rgba(30,100,40,0.2) 0%, transparent 45%)`,
+        accent: "#7ee048",
+        accentGlow: "rgba(126,224,72,0.3)",
+        accentDim: "#3a7a20",
+        accentFaint: "rgba(126,224,72,0.07)",
+        accentBorder: "rgba(126,224,72,0.2)",
+        text: "#c8e8a0",
+        textDim: "#5a8a38",
+        userBubble: "linear-gradient(135deg, #1a4a0a, #123406)",
+        userText: "#d8f090",
+        ballFill: "#d8e830",
+        ballGlow: "rgba(216,232,48,0.4)",
+        courtLine: "#7ee048",
+        btnText: "#050e06",
+      },
+      hard: {
+        label: "🔵 Hard Court Season",
+        sublabel: "US Open · Australian Open",
+        bg: "#040810",
+        bgGrad: `
+          radial-gradient(ellipse at 15% 45%, rgba(10,40,110,0.65) 0%, transparent 55%),
+          radial-gradient(ellipse at 82% 15%, rgba(40,120,220,0.14) 0%, transparent 50%),
+          radial-gradient(ellipse at 55% 85%, rgba(20,60,160,0.22) 0%, transparent 45%)`,
+        accent: "#50b8f8",
+        accentGlow: "rgba(80,184,248,0.3)",
+        accentDim: "#2060a0",
+        accentFaint: "rgba(80,184,248,0.07)",
+        accentBorder: "rgba(80,184,248,0.2)",
+        text: "#b8d8f8",
+        textDim: "#4070a0",
+        userBubble: "linear-gradient(135deg, #081840, #04102c)",
+        userText: "#c8e8ff",
+        ballFill: "#f0e830",
+        ballGlow: "rgba(240,232,48,0.4)",
+        courtLine: "#50b8f8",
+        btnText: "#040810",
+      },
+    };
+
+    function SeasonalDecor({ t }) {
+      const balls = [
+        { top:"7%",  left:"4%",  size:28, delay:"0s",   dur:"6s"   },
+        { top:"72%", left:"3%",  size:20, delay:"1.8s",  dur:"7.5s" },
+        { top:"18%", right:"4%", size:24, delay:"0.6s",  dur:"5.5s" },
+        { top:"62%", right:"5%", size:16, delay:"2.5s",  dur:"8s"   },
+        { top:"40%", left:"7%",  size:12, delay:"3.2s",  dur:"6.5s" },
+      ];
+      return (
+        <div style={{ position:"fixed", inset:0, pointerEvents:"none", overflow:"hidden", zIndex:0 }}>
+          {balls.map((b,i) => (
+            <div key={i} style={{
+              position:"absolute", top:b.top, left:b.left, right:b.right,
+              width:b.size, height:b.size, borderRadius:"50%",
+              background:`radial-gradient(circle at 35% 35%, ${t.ballFill}, ${t.accent}99)`,
+              boxShadow:`0 0 ${b.size/2}px ${t.ballGlow}`,
+              animation:`floatBall ${b.dur} ease-in-out infinite`,
+              animationDelay:b.delay, opacity:0.4,
+            }}>
+              <svg width={b.size} height={b.size} viewBox="0 0 30 30" style={{position:"absolute",inset:0}}>
+                <path d="M5 15 Q10 8 15 15 Q20 22 25 15" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" fill="none"/>
+                <path d="M5 15 Q10 22 15 15 Q20 8 25 15" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" fill="none"/>
+              </svg>
+            </div>
+          ))}
+
+          {/* Racket top-left */}
+          <div style={{ position:"absolute", top:"10%", left:"1.5%", opacity:0.13, animation:"floatRacket1 7s ease-in-out infinite" }}>
+            <svg width="55" height="85" viewBox="0 0 60 90">
+              <ellipse cx="30" cy="28" rx="22" ry="26" fill="none" stroke={t.accent} strokeWidth="2.5"/>
+              {[8,15,22].map(y=><line key={y} x1="10" y1={y+10} x2="50" y2={y+10} stroke={t.accent} strokeWidth="1" opacity="0.5"/>)}
+              {[8,16,24,32,40].map(x=><line key={x} x1={x+6} y1="4" x2={x+6} y2="52" stroke={t.accent} strokeWidth="1" opacity="0.5"/>)}
+              <rect x="27" y="53" width="6" height="26" rx="3" fill={t.accent}/>
+              <rect x="21" y="75" width="18" height="5" rx="2.5" fill={t.accentDim}/>
+            </svg>
+          </div>
+
+          {/* Racket bottom-right */}
+          <div style={{ position:"absolute", bottom:"8%", right:"1.5%", opacity:0.1, animation:"floatRacket2 9s ease-in-out infinite" }}>
+            <svg width="46" height="70" viewBox="0 0 60 90">
+              <ellipse cx="30" cy="28" rx="22" ry="26" fill="none" stroke={t.accent} strokeWidth="2.5"/>
+              {[8,15,22].map(y=><line key={y} x1="10" y1={y+10} x2="50" y2={y+10} stroke={t.accent} strokeWidth="1" opacity="0.5"/>)}
+              {[8,16,24,32,40].map(x=><line key={x} x1={x+6} y1="4" x2={x+6} y2="52" stroke={t.accent} strokeWidth="1" opacity="0.5"/>)}
+              <rect x="27" y="53" width="6" height="26" rx="3" fill={t.accent}/>
+              <rect x="21" y="75" width="18" height="5" rx="2.5" fill={t.accentDim}/>
+            </svg>
+          </div>
+
+          {/* Court lines at bottom */}
+          <div style={{ position:"absolute", bottom:0, left:0, right:0, height:100, opacity:0.05 }}>
+            <svg width="100%" height="100" viewBox="0 0 800 100" preserveAspectRatio="none">
+              <rect x="1" y="1" width="798" height="98" fill="none" stroke={t.courtLine} strokeWidth="2"/>
+              <line x1="400" y1="0" x2="400" y2="100" stroke={t.courtLine} strokeWidth="1.5"/>
+              <line x1="0" y1="50" x2="800" y2="50" stroke={t.courtLine} strokeWidth="1.5"/>
+              <line x1="80" y1="0" x2="80" y2="100" stroke={t.courtLine} strokeWidth="1"/>
+              <line x1="720" y1="0" x2="720" y2="100" stroke={t.courtLine} strokeWidth="1"/>
+            </svg>
+          </div>
+        </div>
+      );
+    }
+
+    const LANGUAGES = [
+      { code:"en", label:"English",  flag:"🇬🇧", placeholder:"Ask your coach anything..." },
+      { code:"es", label:"Español",  flag:"🇪🇸", placeholder:"Pregunta lo que quieras..." },
+      { code:"fr", label:"Français", flag:"🇫🇷", placeholder:"Posez votre question..." },
+      { code:"it", label:"Italiano", flag:"🇮🇹", placeholder:"Chiedi al tuo coach..." },
+      { code:"de", label:"Deutsch",  flag:"🇩🇪", placeholder:"Stell deine Frage..." },
+      { code:"ar", label:"العربية",  flag:"🇸🇦", placeholder:"اسأل مدربك..." },
+      { code:"zh", label:"中文",     flag:"🇨🇳", placeholder:"向教练提问..." },
+    ];
+
+    const SUGGESTED = {
+      en:["Why does my backhand keep going into the net?","Build me a weekly practice plan","How do I add more power to my serve?","Tips for playing against a pusher","How should I warm up?"],
+      es:["¿Por qué mi revés va a la red?","Crea un plan de práctica semanal","¿Cómo agrego potencia a mi saque?","Consejos contra un pelotero","¿Cómo calentar antes del partido?"],
+      fr:["Pourquoi mon revers finit dans le filet?","Plan d'entraînement hebdomadaire","Comment booster mon service?","Conseils contre un pousseur","Comment s'échauffer avant un match?"],
+      it:["Perché il mio rovescio va in rete?","Piano di allenamento settimanale","Come potenzio il mio servizio?","Consigli contro un difensore","Come riscaldarmi prima del match?"],
+      de:["Warum geht mein Rückhand ins Netz?","Wöchentlicher Trainingsplan","Mehr Kraft im Aufschlag?","Tipps gegen einen Pusher","Aufwärmen vor dem Match?"],
+      ar:["لماذا تذهب ضربة الباك هاند إلى الشبكة؟","خطة تدريب أسبوعية","كيف أقوي إرسالي؟","نصائح ضد لاعب دفاعي","كيف أسخن قبل المباراة؟"],
+      zh:["为什么我的反手总是打网？","制定每周练习计划","如何增加发球力量？","对抗防守型球员技巧","比赛前如何热身？"],
+    };
+
+    const WELCOME = {
+      en:(n)=>`👋 Hey ${n}! I'm your personal tennis coach. What do you want to work on today?`,
+      es:(n)=>`👋 ¡Hola ${n}! Soy tu entrenador de tenis personal. ¿En qué quieres trabajar hoy?`,
+      fr:(n)=>`👋 Salut ${n}! Je suis ton coach tennis personnel. Sur quoi veux-tu travailler aujourd'hui?`,
+      it:(n)=>`👋 Ciao ${n}! Sono il tuo coach di tennis personale. Su cosa vuoi lavorare oggi?`,
+      de:(n)=>`👋 Hey ${n}! Ich bin dein persönlicher Tenniscoach. Woran möchtest du heute arbeiten?`,
+      ar:(n)=>`👋 مرحباً ${n}! أنا مدربك الشخصي للتنس. على ماذا تريد العمل اليوم؟`,
+      zh:(n)=>`👋 你好 ${n}！我是你的私人网球教练。今天想练什么？`,
+    };
+
+    const SYSTEM_PROMPT = `You are AceCoach, an expert AI tennis coach with 20+ years of experience coaching recreational players from beginner to advanced club level.
+Your personality: encouraging, precise, practical. You speak like a seasoned coach on a courtside bench — direct, warm, knowledgeable.
+You help players with technique problems, practice routines, mental game, match strategy, rules, gear advice, and drills.
+Always ask follow-up questions to personalize advice. Keep responses focused and actionable. Use short paragraphs. Never be vague.
+IMPORTANT: Always respond in the same language the user writes in.`;
+
+    async function callAPI(messages) {
+      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,system:SYSTEM_PROMPT})});
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error||'API error');
+      return d.content?.[0]?.text||"Sorry, I couldn't get a response.";
+    }
+
+    function getYouTubeQuery(u,r) {
+      const t=(u+' '+r).toLowerCase();
+      if(t.includes('serve')||t.includes('saque')||t.includes('servizio')||t.includes('发球')) return 'tennis serve technique tutorial';
+      if(t.includes('backhand')||t.includes('revés')||t.includes('rovescio')||t.includes('反手')) return 'tennis backhand technique tutorial';
+      if(t.includes('forehand')||t.includes('derecha')||t.includes('dritto')||t.includes('正手')) return 'tennis forehand technique tutorial';
+      if(t.includes('volley')||t.includes('volea')) return 'tennis volley technique tutorial';
+      if(t.includes('footwork')||t.includes('piernas')||t.includes('piedi')) return 'tennis footwork drills';
+      if(t.includes('practice')||t.includes('drill')||t.includes('allenamento')||t.includes('训练')) return 'tennis practice drills solo';
+      if(t.includes('mental')||t.includes('nervios')||t.includes('压力')) return 'tennis mental game tips';
+      if(t.includes('strategy')||t.includes('táctica')||t.includes('战术')) return 'tennis match strategy tips';
+      if(t.includes('pusher')||t.includes('pelotero')) return 'how to beat a pusher tennis';
+      return 'tennis technique tutorial tips';
+    }
+
+    function VideoButton({userMsg,replyMsg}) {
+      const url=`https://www.youtube.com/results?search_query=${encodeURIComponent(getYouTubeQuery(userMsg,replyMsg))}`;
+      return(
+        <a href={url} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:"rgba(255,60,60,0.12)",border:"1px solid rgba(255,80,80,0.25)",borderRadius:20,padding:"6px 12px",textDecoration:"none",color:"#ff8a8a",fontSize:12,fontFamily:"Georgia,serif"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#ff8a8a"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-1.3C16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1c-.6.1-1.9.1-3 1.3C1.3 5 1 7 1 7S.7 9.1.7 11.2v2c0 2.1.3 4.2.3 4.2s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 21.6 12 21.6 12 21.6s4.2 0 6.8-.2c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.1.3-4.2v-2C23.3 9.1 23 7 23 7zM9.7 15.5V8.4l8.1 3.6-8.1 3.5z"/></svg>
+          📹 Watch on YouTube
+        </a>
+      );
+    }
+
+    function EmailScreen({onSubmit,t}) {
+      const [email,setEmail]=React.useState("");
+      const [name,setName]=React.useState("");
+      const [lang,setLang]=React.useState("en");
+      const [error,setError]=React.useState("");
+      const go=()=>{
+        if(!name.trim()) return setError("Please enter your name.");
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setError("Please enter a valid email.");
+        setError(""); onSubmit({name:name.trim(),email:email.trim(),lang});
+      };
+      const inp={width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${t.accentBorder}`,borderRadius:10,padding:"12px 14px",color:t.text,fontSize:14,fontFamily:"Georgia,serif",outline:"none"};
+      return(
+        <div style={{minHeight:"100vh",background:t.bg,backgroundImage:t.bgGrad,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",padding:24,position:"relative"}}>
+          <SeasonalDecor t={t}/>
+          <div style={{width:"100%",maxWidth:420,position:"relative",zIndex:1}}>
+            <div style={{textAlign:"center",marginBottom:40}}>
+              <div style={{width:68,height:68,borderRadius:"50%",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 14px",boxShadow:`0 0 32px ${t.accentGlow}`}}>🎾</div>
+              <div style={{color:t.accent,fontSize:30,fontWeight:"bold",letterSpacing:"0.02em"}}>AceCoach</div>
+              <div style={{color:t.accentDim,fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",marginTop:4}}>{t.label}</div>
+              <div style={{color:t.accentDim,fontSize:10,letterSpacing:"0.1em",opacity:0.7,marginTop:2}}>{t.sublabel}</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${t.accentBorder}`,borderRadius:20,padding:"32px 28px",backdropFilter:"blur(10px)"}}>
+              <h2 style={{color:t.text,fontSize:20,marginBottom:8,fontWeight:"normal"}}>Get 5 free coaching sessions</h2>
+              <p style={{color:t.textDim,fontSize:14,lineHeight:1.6,marginBottom:24}}>Enter your details to start. No credit card needed.</p>
+              <div style={{marginBottom:20}}>
+                <label style={{color:t.accentDim,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:8}}>Language</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {LANGUAGES.map(l=>(
+                    <button key={l.code} onClick={()=>setLang(l.code)} style={{background:lang===l.code?t.accentFaint.replace('0.08','0.2'):"rgba(255,255,255,0.03)",border:`1px solid ${lang===l.code?t.accent:t.accentBorder}`,borderRadius:20,padding:"5px 12px",color:lang===l.code?t.accent:t.textDim,fontSize:13,cursor:"pointer",fontFamily:"Georgia,serif",display:"flex",alignItems:"center",gap:5}}>
+                      {l.flag} {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{color:t.accentDim,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:8}}>Your name</label>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Alex" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+              </div>
+              <div style={{marginBottom:24}}>
+                <label style={{color:t.accentDim,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:8}}>Email address</label>
+                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+              </div>
+              {error&&<p style={{color:"#ff7a6a",fontSize:13,marginBottom:16}}>{error}</p>}
+              <button onClick={go} style={{width:"100%",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,border:"none",borderRadius:12,padding:14,color:t.btnText,fontSize:15,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",boxShadow:`0 4px 20px ${t.accentGlow}`}}>
+                Start Free Trial →
+              </button>
+              <p style={{color:t.accentDim,fontSize:12,textAlign:"center",marginTop:14,opacity:0.7}}>5 free messages · No spam · Unsubscribe anytime</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function PaywallScreen({name,t}) {
+      const features=["Unlimited coaching messages","Personalized practice plans","Match strategy & mental game","Technique breakdowns","Cancel anytime"];
+      return(
+        <div style={{minHeight:"100vh",background:t.bg,backgroundImage:t.bgGrad,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",padding:24,position:"relative"}}>
+          <SeasonalDecor t={t}/>
+          <div style={{width:"100%",maxWidth:420,textAlign:"center",position:"relative",zIndex:1}}>
+            <div style={{fontSize:52,marginBottom:16}}>🏆</div>
+            <h2 style={{color:t.text,fontSize:22,marginBottom:10,fontWeight:"normal"}}>You've used your 5 free sessions, {name}!</h2>
+            <p style={{color:t.textDim,fontSize:15,lineHeight:1.7,marginBottom:32}}>Unlock unlimited coaching, drill plans, and match strategy.</p>
+            <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${t.accentBorder}`,borderRadius:20,padding:"28px 24px",marginBottom:16,backdropFilter:"blur(10px)"}}>
+              <div style={{color:t.accentDim,fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>AceCoach Pro</div>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:4,marginBottom:20}}>
+                <span style={{color:t.accent,fontSize:46,fontWeight:"bold"}}>$8</span>
+                <span style={{color:t.textDim,fontSize:16}}>/month</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24,textAlign:"left"}}>
+                {features.map((f,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:t.accentFaint,border:`1px solid ${t.accentBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 5L3.8 7.5L8.5 2.5" stroke={t.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+                    </div>
+                    <span style={{color:t.text,fontSize:14,opacity:0.85}}>{f}</span>
+                  </div>
+                ))}
+              </div>
+              <a href={STRIPE_URL} target="_blank" rel="noreferrer" style={{display:"block",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,borderRadius:12,padding:14,color:t.btnText,fontSize:15,fontWeight:"bold",textDecoration:"none",boxShadow:`0 4px 20px ${t.accentGlow}`}}>
+                Unlock Unlimited Access →
+              </a>
+            </div>
+            <p style={{color:t.accentDim,fontSize:12,opacity:0.7}}>Secure payment via Stripe · Cancel anytime</p>
+          </div>
+        </div>
+      );
+    }
+
+    function ChatScreen({user,onPaywall,t}) {
+      const [messages,setMessages]=React.useState([]);
+      const [input,setInput]=React.useState("");
+      const [loading,setLoading]=React.useState(false);
+      const [started,setStarted]=React.useState(false);
+      const [msgCount,setMsgCount]=React.useState(0);
+      const bottomRef=React.useRef(null);
+      const lang=user.lang||"en";
+      const langObj=LANGUAGES.find(l=>l.code===lang)||LANGUAGES[0];
+
+      React.useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[messages,loading]);
+
+      const send=async(text)=>{
+        const userText=text||input.trim();
+        if(!userText||loading) return;
+        if(msgCount>=FREE_MESSAGES) return onPaywall();
+        setInput(""); setStarted(true);
+        const newMsgs=[...messages,{role:"user",content:userText}];
+        setMessages(newMsgs); setLoading(true);
+        try{
+          const reply=await callAPI(newMsgs);
+          const nc=msgCount+1; setMsgCount(nc);
+          setMessages([...newMsgs,{role:"assistant",content:reply}]);
+          if(nc>=FREE_MESSAGES) setTimeout(onPaywall,2200);
+        }catch(err){
+          setMessages([...newMsgs,{role:"assistant",content:`Error: ${err.message}`}]);
+        }
+        setLoading(false);
+      };
+
+      const rem=FREE_MESSAGES-msgCount;
+      const low=rem<=2;
+      const suggested=SUGGESTED[lang]||SUGGESTED.en;
+      const welcome=(WELCOME[lang]||WELCOME.en)(user.name);
+
+      return(
+        <div style={{minHeight:"100vh",background:t.bg,backgroundImage:t.bgGrad,fontFamily:"Georgia,serif",display:"flex",flexDirection:"column",alignItems:"center",position:"relative"}}>
+          <SeasonalDecor t={t}/>
+
+          {/* Header */}
+          <div style={{width:"100%",maxWidth:720,padding:"18px 24px 0",display:"flex",alignItems:"center",gap:12,position:"relative",zIndex:1}}>
+            <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,boxShadow:`0 0 18px ${t.accentGlow}`}}>🎾</div>
+            <div>
+              <div style={{color:t.accent,fontSize:20,fontWeight:"bold"}}>AceCoach</div>
+              <div style={{color:t.accentDim,fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase"}}>{t.sublabel} · {langObj.flag} {langObj.label}</div>
+            </div>
+            <div style={{marginLeft:"auto"}}>
+              <div style={{background:low?"rgba(255,100,60,0.12)":t.accentFaint,border:`1px solid ${low?"rgba(255,100,60,0.3)":t.accentBorder}`,borderRadius:20,padding:"4px 12px"}}>
+                <span style={{color:low?"#ff9060":t.accent,fontSize:12}}>{rem} free {rem===1?"session":"sessions"} left</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat */}
+          <div style={{width:"100%",maxWidth:720,flex:1,padding:"18px 24px 0",display:"flex",flexDirection:"column",minHeight:"calc(100vh - 155px)",position:"relative",zIndex:1}}>
+            {!started&&(
+              <div style={{marginBottom:22}}>
+                <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${t.accentBorder}`,borderRadius:16,padding:22,marginBottom:16,backdropFilter:"blur(6px)"}}>
+                  <p style={{color:t.text,fontSize:15,lineHeight:1.75}}>{welcome}</p>
+                </div>
+                <p style={{color:t.accentDim,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Try asking</p>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {suggested.map((q,i)=>(
+                    <button key={i} onClick={()=>send(q)} style={{background:t.accentFaint,border:`1px solid ${t.accentBorder}`,borderRadius:20,color:t.accent,fontSize:13,padding:"7px 13px",cursor:"pointer",fontFamily:"Georgia,serif",opacity:0.85}}>{q}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {messages.map((msg,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start"}}>
+                  {msg.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:9,marginTop:4}}>🎾</div>}
+                  <div style={{maxWidth:"78%",padding:"11px 15px",borderRadius:msg.role==="user"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:msg.role==="user"?t.userBubble:"rgba(255,255,255,0.05)",border:`1px solid ${msg.role==="user"?t.userBubbleBorder:"rgba(255,255,255,0.08)"}`,color:msg.role==="user"?t.userText:t.text,fontSize:14.5,lineHeight:1.75,whiteSpace:"pre-wrap"}}>
+                    {msg.content}
+                    {msg.role==="assistant"&&<VideoButton userMsg={messages[i-1]?.content||""} replyMsg={msg.content}/>}
+                  </div>
+                </div>
+              ))}
+              {loading&&(
+                <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>🎾</div>
+                  <div style={{padding:"11px 16px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"18px 18px 18px 4px",display:"flex",gap:5,alignItems:"center"}}>
+                    {[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:t.accent,animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`,opacity:0.7}}/>)}
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef}/>
+            </div>
+          </div>
+
+          {/* Input */}
+          <div style={{width:"100%",maxWidth:720,padding:"14px 24px 22px",position:"sticky",bottom:0,background:`linear-gradient(to top, ${t.bg} 65%, transparent)`,zIndex:1}}>
+            <div style={{display:"flex",gap:9,background:"rgba(255,255,255,0.05)",border:`1px solid ${t.accentBorder}`,borderRadius:13,padding:"7px 7px 7px 15px",backdropFilter:"blur(6px)"}}>
+              <textarea value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
+                placeholder={langObj.placeholder} rows={1}
+                dir={lang==="ar"?"rtl":"ltr"}
+                style={{flex:1,background:"transparent",border:"none",outline:"none",color:t.text,fontSize:14.5,fontFamily:"Georgia,serif",resize:"none",lineHeight:1.5,paddingTop:5,paddingBottom:5}}/>
+              <button onClick={()=>send()} disabled={!input.trim()||loading}
+                style={{background:input.trim()&&!loading?`linear-gradient(135deg, ${t.accent}, ${t.accentDim})`:`${t.accentFaint}`,border:"none",borderRadius:9,width:36,height:36,cursor:input.trim()&&!loading?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,alignSelf:"flex-end",boxShadow:input.trim()&&!loading?`0 2px 12px ${t.accentGlow}`:"none"}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path d="M22 2L11 13" stroke={input.trim()&&!loading?t.btnText:t.accentDim} strokeWidth="2.5" strokeLinecap="round"/>
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={input.trim()&&!loading?t.btnText:t.accentDim} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [screen,setScreen]=React.useState("email");
+      const [user,setUser]=React.useState(null);
+      const t = THEMES[getSeason()];
+      if(screen==="email") return <EmailScreen onSubmit={u=>{setUser(u);setScreen("chat");}} t={t}/>;
+      if(screen==="paywall") return <PaywallScreen name={user?.name||"there"} t={t}/>;
+      return <ChatScreen user={user} onPaywall={()=>setScreen("paywall")} t={t}/>;
+    }
+
+    const root=ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
