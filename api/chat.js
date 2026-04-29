@@ -52,30 +52,3 @@ Example: VIDEO_QUERY: tennis topspin forehand technique drill`;
     res.status(500).json({ error: error.message });
   }
 }
-    // Clean the text — remove the VIDEO_QUERY line from displayed response
-    const text = raw.replace(/\nVIDEO_QUERY:.*$/m, '').trim();
-
-    res.status(200).json({ content: [{ text, videoQuery }] });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
-    const data = await response.json();
-    if (!response.ok) return res.status(500).json({ error: data.error?.message || 'Groq error' });
-
-    const raw = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
-
-    // Extract VIDEO_QUERY if present
-    const videoMatch = raw.match(/VIDEO_QUERY:\s*(.+)$/m);
-    const videoQuery = videoMatch ? videoMatch[1].trim() : null;
-
-    // Clean the text — remove the VIDEO_QUERY line from displayed response
-    const text = raw.replace(/\nVIDEO_QUERY:.*$/m, '').trim();
-
-    res.status(200).json({ content: [{ text, videoQuery }] });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
