@@ -1,7 +1,0 @@
-{
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/legal.html", "dest": "/legal.html" },
-    { "src": "/(.*)", "dest": "/acecoach.html" }
-  ]
-}
