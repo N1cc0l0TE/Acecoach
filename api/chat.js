@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   try {
     const { messages, system } = req.body;
 
-    // Strip any extra fields Groq doesn't accept (e.g. videoQuery)
+    // Strip any extra fields Groq doesn't accept
     const cleanMessages = messages.map(({ role, content }) => ({ role, content }));
 
     const enhancedSystem = system + `
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 At the end of every response, on a new line, add exactly this format if a video would help:
 VIDEO_QUERY: [specific youtube search query in english, max 6 words]
 
-Only include VIDEO_QUERY if a video would genuinely help illustrate your answer (technique, drill, exercise). 
+Only include VIDEO_QUERY if a video would genuinely help illustrate your answer (technique, drill, exercise).
 Do NOT include VIDEO_QUERY for strategy questions, mental game, rules, gear advice, or general conversation.
 Example: VIDEO_QUERY: tennis topspin forehand technique drill`;
 
@@ -42,10 +42,16 @@ Example: VIDEO_QUERY: tennis topspin forehand technique drill`;
 
     const raw = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
 
-    // Extract VIDEO_QUERY if present
     const videoMatch = raw.match(/VIDEO_QUERY:\s*(.+)$/m);
     const videoQuery = videoMatch ? videoMatch[1].trim() : null;
+    const text = raw.replace(/\nVIDEO_QUERY:.*$/m, '').trim();
 
+    res.status(200).json({ content: [{ text, videoQuery }] });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
     // Clean the text — remove the VIDEO_QUERY line from displayed response
     const text = raw.replace(/\nVIDEO_QUERY:.*$/m, '').trim();
 
