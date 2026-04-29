@@ -12,6 +12,9 @@ export default async function handler(req, res) {
   try {
     const { messages, system } = req.body;
 
+    // Strip any extra fields Groq doesn't accept (e.g. videoQuery)
+    const cleanMessages = messages.map(({ role, content }) => ({ role, content }));
+
     const enhancedSystem = system + `
 
 At the end of every response, on a new line, add exactly this format if a video would help:
@@ -29,11 +32,29 @@ Example: VIDEO_QUERY: tennis topspin forehand technique drill`;
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'system', content: enhancedSystem }, ...messages],
+        messages: [{ role: 'system', content: enhancedSystem }, ...cleanMessages],
         max_tokens: 1000
       })
     });
 
+    const data = await response.json();
+    if (!response.ok) return res.status(500).json({ error: data.error?.message || 'Groq error' });
+
+    const raw = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
+
+    // Extract VIDEO_QUERY if present
+    const videoMatch = raw.match(/VIDEO_QUERY:\s*(.+)$/m);
+    const videoQuery = videoMatch ? videoMatch[1].trim() : null;
+
+    // Clean the text — remove the VIDEO_QUERY line from displayed response
+    const text = raw.replace(/\nVIDEO_QUERY:.*$/m, '').trim();
+
+    res.status(200).json({ content: [{ text, videoQuery }] });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
     const data = await response.json();
     if (!response.ok) return res.status(500).json({ error: data.error?.message || 'Groq error' });
 
